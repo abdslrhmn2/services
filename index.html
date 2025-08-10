@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>دليل الخدمات المحلي</title>
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+  <style>
+    /* ---------- ألوان المشروع (قابلة للتعديل بسهولة) ---------- */
+    :root{
+      --forest-1: #428177; /* Forest */
+      --forest-2: #054239;
+      --forest-3: #002623;
+
+      --wheat-1: #edebe0; /* Golden Wheat */
+      --wheat-2: #b9a779;
+      --wheat-3: #988561;
+
+      --umber-1: #6b1f2a; /* Deep Umber */
+      --umber-2: #4a151e;
+      --umber-3: #260f14;
+
+      --char-1: #ffffff; /* Charcoal - here used as white */
+      --char-2: #3d3a3b;
+      --char-3: #161616;
+
+      --bg: var(--wheat-1);
+      --card: #ffffff;
+      --accent: var(--forest-1);
+      --accent-dark: var(--forest-2);
+      --cta: var(--umber-1);
+    }
+
+    @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;700&display=swap');
+    *{box-sizing:border-box}
+    body{ font-family:'Tajawal',sans-serif; margin:0; background:var(--bg); color:var(--char-3); }
+
+    header{ background:linear-gradient(90deg,var(--forest-2),var(--forest-1)); color:var(--char-1); padding:14px 16px; display:flex; align-items:center; justify-content:space-between }
+    header h1{ margin:0; font-size:20px }
+    header .actions{ display:flex; gap:8px; align-items:center }
+    .btn{ background:var(--accent); color:var(--char-1); padding:8px 10px; border-radius:8px; text-decoration:none; display:inline-block; border:none; cursor:pointer }
+    .btn.ghost{ background:transparent; border:1px solid rgba(255,255,255,0.25); }
+
+    .wrap{ max-width:1100px; margin:16px auto; padding:12px; display:grid; grid-template-columns: 1fr 380px; gap:16px }
+
+    /* الخريطة */
+    #map{ width:100%; height:520px; border-radius:12px; box-shadow:0 6px 18px rgba(0,0,0,0.08); overflow:hidden }
+
+    /* الشريط الجانبي */
+    aside{ }
+    .card{ background:var(--card); border-radius:12px; padding:12px; box-shadow:0 4px 12px rgba(0,0,0,0.06); margin-bottom:12px }
+    .search{ display:flex; gap:8px; margin-bottom:10px }
+    .search input, .search select{ padding:10px; border-radius:8px; border:1px solid #e6e6e6; width:100% }
+
+    #list{ display:flex; flex-direction:column; gap:10px; max-height:340px; overflow:auto; padding-right:6px }
+    .provider{ display:flex; gap:10px; align-items:center; padding:10px; border-radius:10px; border:1px solid #f0f0f0 }
+    .provider img{ width:72px; height:72px; object-fit:cover; border-radius:8px; background:#f6f6f6 }
+    .provider h3{ margin:0; font-size:16px }
+    .small{ color:#666; font-size:13px }
+
+    .card .muted{ color:#777; font-size:13px }
+
+    /* نموذج الإضافة */
+    form label{ display:block; margin-top:8px; font-size:13px }
+    form input, form textarea, form select{ width:100%; padding:10px; margin-top:6px; border-radius:8px; border:1px solid #e6e6e6 }
+    textarea{ min-height:80px }
+
+    /* أزرار البطاقة */
+    .actions-row{ display:flex; gap:8px; margin-top:8px }
+    .btn-whatsapp{ background:linear-gradient(90deg,#25D366,#128C7E); color:white }
+    .btn-call{ background:linear-gradient(90deg,#00AEEF,#0077B6); color:white }
+
+    /* تسجيل دخول */
+    .auth-row{ display:flex; gap:8px; align-items:center }
+
+    footer{ text-align:center; color:#666; padding:14px }
+
+    @media(max-width:980px){ .wrap{ grid-template-columns:1fr; } #map{ height:420px } aside{ order:2 } }
+  </style>
+</head>
+<body>
+<header>
+  <h1>دليل الخدمات</h1>
+  <div class="actions">
+    <div class="small" id="userInfo">غير مسجل</div>
+    <button class="btn" id="openLoginBtn">تسجيل / دخول</button>
+  </div>
+</header>
+
+<main class="wrap">
+  <section>
+    <div id="map" aria-label="خريطة"></div>
+
+    <div class="card" style="margin-top:12px">
+      <h3>تعليمات</h3>
+      <p class="muted">انقر على الخريطة لاختيار موقع الخدمة عند إضافة خدمة جديدة. لعرض تفاصيل أي مقدم خدمة، اضغط على البطاقة في القائمة الجانبية أو النقطة على الخريطة.</p>
+    </div>
+  </section>
+
+  <aside>
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center">
+        <h3 style="margin:0">البحث والتصفية</h3>
+        <button id="refreshBtn" class="btn ghost">تحديث</button>
+      </div>
+
+      <div class="search" style="margin-top:10px">
+        <input id="q" placeholder="ابحث عن خدمة أو اسم" />
+      </div>
+      <div style="display:flex; gap:8px; margin-bottom:8px">
+        <select id="filter" style="flex:1">
+          <option value="all">كل التصنيفات</option>
+        </select>
+        <select id="cityFilter" style="width:140px">
+          <option value="all">كل المدن</option>
+        </select>
+      </div>
+      <div id="list" aria-live="polite"></div>
+    </div>
+
+    <div class="card" id="authCard">
+      <h3 id="authTitle">تسجيل الدخول</h3>
+      <div id="authForms">
+        <!-- نماذج التسجيل والدخول -->
+        <div id="loginForm">
+          <label>اسم المستخدم
+            <input id="login_user" placeholder="اسم المستخدم" />
+          </label>
+          <label>كلمة المرور
+            <input id="login_pass" type="password" placeholder="كلمة المرور" />
+          </label>
+          <div style="display:flex; gap:8px; margin-top:8px">
+            <button class="btn" id="loginBtn">دخول</button>
+            <button class="btn ghost" id="showSignupBtn">إنشاء حساب</button>
+          </div>
+        </div>
+
+        <div id="signupForm" style="display:none">
+          <label>اسم المستخدم
+            <input id="signup_user" placeholder="اختر اسم مستخدم" />
+          </label>
+          <label>كلمة المرور
+            <input id="signup_pass" type="password" placeholder="كلمة مرور" />
+          </label>
+          <div style="display:flex; gap:8px; margin-top:8px">
+            <button class="btn" id="signupBtn">إنشاء</button>
+            <button class="btn ghost" id="showLoginBtn">عودة</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="addCard" style="display:none">
+      <h3>إضافة خدمة جديدة</h3>
+      <form id="addForm">
+        <label>اسم النشاط
+          <input id="f_name" required />
+        </label>
+        <label>التصنيف
+          <select id="f_category">
+            <option value="صيدلية">صيدلية</option>
+            <option value="مستشفى">مستشفى</option>
+            <option value="كهربائي">كهربائي</option>
+            <option value="سباك">سباك</option>
+            <option value="مغسلة سيارات">مغسلة سيارات</option>
+            <option value="ملاعب">ملاعب</option>
+            <option value="خدمات اخرى">خدمات اخرى</option>
+          </select>
+        </label>
+        <label>رقم الهاتف (مع كود الدولة)
+          <input id="f_phone" placeholder="+964770xxxxxxx" />
+        </label>
+        <label>المدينة / الحي
+          <input id="f_city" placeholder="مثال: بغداد - الكرخ" />
+        </label>
+        <label>رابط صورة (اختياري)
+          <input id="f_img" placeholder="رابط صورة أو اتركه فارغ" />
+        </label>
+        <label>وصف قصير
+          <textarea id="f_desc"></textarea>
+        </label>
+        <div class="small">* اختر الموقع مباشرة بالنقر على الخريطة ثم اضغط "أضف الخدمة".</div>
+        <div style="margin-top:10px; display:flex; gap:8px">
+          <button class="btn" type="submit">أضف الخدمة</button>
+          <button type="button" id="logoutBtn" class="btn ghost">تسجيل خروج</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="card">
+      <h3>إعدادات متقدمة</h3>
+      <div class="small">يمكنك تنزيل بيانات الخدمات كملف JSON أو استيرادها من ملف JSON.</div>
+      <div style="display:flex; gap:8px; margin-top:8px">
+        <button id="exportBtn" class="btn ghost">تنزيل JSON</button>
+        <input id="importFile" type="file" accept="application/json" style="display:none" />
+        <button id="importBtn" class="btn">استيراد JSON</button>
+      </div>
+    </div>
+
+  </aside>
+</main>
+
+<footer>تم تصميم القالب للعمل محليًا وبدون سيرفر. يمكنك رفعه على GitHub Pages لتشغيله عبر رابط.</footer>
+
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script>
+// ---------- بيانات أبدأية (تُحفظ محلياً) ----------
+const SAMPLE = [
+  { id:1, name:'صيدلية الشفاء', category:'صيدلية', phone:'+9647701111111', city:'الكرخ', lat:36.349, lng:44.005, img:'https://via.placeholder.com/200x140?text=صيدلية', desc:'صيدلية مناوبة 24 ساعة' },
+  { id:2, name:'كهربائي الحلول', category:'كهربائي', phone:'+9647702222222', city:'الاحمدي', lat:36.347, lng:44.01, img:'https://via.placeholder.com/200x140?text=كهربائي', desc:'صيانة كهرباء منازل' }
+];
+
+// ---------- إعداد الخريطة ----------
+const map = L.map('map').setView([36.349, 44.006], 13);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
+let providers = loadProviders();
+let markers = {};
+let tempMarker = null; // marker للاختيار عند إضافة خدمة
+
+function loadProviders(){
+  try{
+    const raw = localStorage.getItem('providers_v2');
+    if(raw) return JSON.parse(raw);
+  }catch(e){ console.error(e) }
+  // إن لم توجد بيانات محلية، نستخدم العينات
+  return SAMPLE.slice();
+}
+function saveProviders(){ localStorage.setItem('providers_v2', JSON.stringify(providers)); }
+
+function createMarker(p){
+  const icon = L.icon({ iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png', iconSize:[25,41], iconAnchor:[12,41] });
+  const m = L.marker([p.lat,p.lng], { icon }).addTo(map);
+  m.bindPopup(`<b>${escapeHtml(p.name)}</b><br>${escapeHtml(p.category)} • ${escapeHtml(p.city || '')}<br>${escapeHtml(p.desc || '')}<br><a href='tel:${p.phone}'>📞 اتصال</a> | <a target='_blank' href='https://wa.me/${p.phone.replace(/[^0-9+]/g,'')}'>💬 واتساب</a>`);
+  markers[p.id] = m;
+}
+
+function renderMarkers(){ Object.values(markers).forEach(m=> map.removeLayer(m)); markers = {}; providers.forEach(p=> createMarker(p)); }
+
+function renderList(q='', cat='all', city='all'){
+  const list = document.getElementById('list'); list.innerHTML='';
+  const filtered = providers.filter(p=>{
+    if(cat !== 'all' && p.category !== cat) return false;
+    if(city !== 'all' && p.city !== city) return false;
+    const text = (p.name + ' ' + p.category + ' ' + (p.city||'') + ' ' + (p.desc||'')).toLowerCase();
+    if(q && !text.includes(q.trim().toLowerCase())) return false;
+    return true;
+  });
+  if(filtered.length===0){ list.innerHTML = '<div class="small">لا توجد نتائج</div>'; return; }
+  filtered.forEach(p=>{
+    const div = document.createElement('div'); div.className='provider';
+    div.innerHTML = `
+      <img src="${p.img||'https://via.placeholder.com/200x140'}" alt="">
+      <div style="flex:1">
+        <h3>${escapeHtml(p.name)}</h3>
+        <div class="small">${escapeHtml(p.category)} • ${escapeHtml(p.city||'')}</div>
+        <div class="small">${escapeHtml(p.desc||'')}</div>
+        <div class="actions-row">
+          <a class="btn btn-call" href="tel:${p.phone}">اتصل</a>
+          <a class="btn btn-whatsapp" target="_blank" href="https://wa.me/${p.phone.replace(/[^0-9+]/g,'')}">واتساب</a>
+        </div>
+      </div>
+    `;
+    div.querySelector('img').addEventListener('error', e=> e.target.src='https://via.placeholder.com/200x140');
+    div.addEventListener('click', ()=>{ map.setView([p.lat,p.lng],16); markers[p.id].openPopup(); });
+    list.appendChild(div);
+  });
+}
+
+function populateFilters(){
+  const catSel = document.getElementById('filter'); const citySel = document.getElementById('cityFilter');
+  // امسح القيم القديمة
+  const existingCats = new Set(); const existingCities = new Set();
+  providers.forEach(p=> { existingCats.add(p.category); if(p.city) existingCities.add(p.city); });
+  // أزل الخيارات الاضافية
+  Array.from(catSel.options).slice(1).forEach(o=> o.remove());
+  Array.from(citySel.options).slice(1).forEach(o=> o.remove());
+  existingCats.forEach(c=>{ const o=document.createElement('option'); o.value=c; o.textContent=c; catSel.appendChild(o); });
+  existingCities.forEach(c=>{ const o=document.createElement('option'); o.value=c; o.textContent=c; citySel.appendChild(o); });
+}
+
+// أدوات صغيرة
+function escapeHtml(s){ if(!s) return ''; return s.replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]||c; }); }
+
+// ---------- التعامل مع تسجيل الدخول (محلي) ----------
+function getUsers(){ try{ const raw=localStorage.getItem('users_v1'); return raw ? JSON.parse(raw) : {}; }catch(e){ return {}; } }
+function saveUsers(u){ localStorage.setItem('users_v1', JSON.stringify(u)); }
+
+function setCurrentUser(username){ localStorage.setItem('current_user', username); updateAuthUI(); }
+function getCurrentUser(){ return localStorage.getItem('current_user'); }
+function logout(){ localStorage.removeItem('current_user'); updateAuthUI(); }
+
+function updateAuthUI(){ const user = getCurrentUser(); const userInfo = document.getElementById('userInfo'); const authCard = document.getElementById('authCard'); const addCard = document.getElementById('addCard');
+  if(user){ userInfo.textContent = 'مرحباً، ' + user; document.getElementById('authCard').style.display='none'; addCard.style.display='block'; }
+  else{ userInfo.textContent = 'غير مسجل'; document.getElementById('authCard').style.display='block'; addCard.style.display='none'; }
+}
+
+// أحداث التسجيل والدخول
+document.getElementById('showSignupBtn').addEventListener('click', ()=>{ document.getElementById('loginForm').style.display='none'; document.getElementById('signupForm').style.display='block'; document.getElementById('authTitle').textContent='إنشاء حساب'; });
+document.getElementById('showLoginBtn').addEventListener('click', ()=>{ document.getElementById('loginForm').style.display='block'; document.getElementById('signupForm').style.display='none'; document.getElementById('authTitle').textContent='تسجيل الدخول'; });
+
+document.getElementById('signupBtn').addEventListener('click', ()=>{
+  const user = document.getElementById('signup_user').value.trim(); const pass = document.getElementById('signup_pass').value;
+  if(!user || !pass){ alert('ادخل اسم مستخدم وكلمة مرور'); return; }
+  const users = getUsers(); if(users[user]){ alert('اسم المستخدم موجود مسبقاً'); return; }
+  users[user] = { pass }; saveUsers(users); setCurrentUser(user); alert('تم إنشاء الحساب وتسجيل الدخول');
+});
+
+document.getElementById('loginBtn').addEventListener('click', ()=>{
+  const user = document.getElementById('login_user').value.trim(); const pass = document.getElementById('login_pass').value;
+  if(!user || !pass){ alert('ادخل اسم المستخدم وكلمة المرور'); return; }
+  const users = getUsers(); if(!users[user] || users[user].pass !== pass){ alert('بيانات غير صحيحة'); return; }
+  setCurrentUser(user); alert('تم تسجيل الدخول');
+});
+
+document.getElementById('logoutBtn').addEventListener('click', ()=>{ if(confirm('هل تريد تسجيل الخروج؟')) logout(); });
+
+// ---------- اختيار الموقع بالنقر على الخريطة ----------
+map.on('click', function(e){
+  const user = getCurrentUser();
+  if(!user){ alert('لتحديد الموقع يجب تسجيل الدخول أولاً'); return; }
+  // إنشاء أو تحريك المؤشر المؤقت
+  if(tempMarker) map.removeLayer(tempMarker);
+  tempMarker = L.marker(e.latlng).addTo(map).bindPopup('موقع مختار').openPopup();
+  // خزّن الإحداثيات مؤقتًا في العنصر form dataset
+  const addForm = document.getElementById('addForm');
+  addForm.dataset.lat = e.latlng.lat; addForm.dataset.lng = e.latlng.lng;
+  alert('تم اختيار الموقع، الآن املأ الحقول وانقر "أضف الخدمة"');
+});
+
+// ---------- إضافة خدمة (تستعمل الإحداثيات المخزنة) ----------
+document.getElementById('addForm').addEventListener('submit', function(ev){
+  ev.preventDefault();
+  const user = getCurrentUser(); if(!user){ alert('يرجى تسجيل الدخول'); return; }
+  const name = document.getElementById('f_name').value.trim();
+  const category = document.getElementById('f_category').value;
+  const phone = document.getElementById('f_phone').value.trim();
+  const city = document.getElementById('f_city').value.trim();
+  const img = document.getElementById('f_img').value.trim();
+  const desc = document.getElementById('f_desc').value.trim();
+  const lat = parseFloat(this.dataset.lat); const lng = parseFloat(this.dataset.lng);
+  if(!name || !phone || !city){ alert('يرجى تعبئة الاسم، رقم الهاتف، والمدينة'); return; }
+  if(!lat || !lng){ alert('يرجى اختيار الموقع بالنقر على الخريطة أولاً'); return; }
+  const p = { id: Date.now(), name, category, phone, city, img: img || 'https://via.placeholder.com/200x140', desc, lat, lng };
+  providers.push(p); saveProviders(); renderMarkers(); renderList(document.getElementById('q').value, document.getElementById('filter').value, document.getElementById('cityFilter').value); populateFilters();
+  // أزل المؤشر المؤقت
+  if(tempMarker){ map.removeLayer(tempMarker); tempMarker = null; delete this.dataset.lat; delete this.dataset.lng; }
+  this.reset(); alert('تمت إضافة الخدمة محلياً');
+});
+
+// ---------- تصدير واستيراد JSON ----------
+document.getElementById('exportBtn').addEventListener('click', ()=>{
+  const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(providers, null, 2));
+  const a = document.createElement('a'); a.href = dataStr; a.download = 'providers.json'; document.body.appendChild(a); a.click(); a.remove();
+});
+
+document.getElementById('importBtn').addEventListener('click', ()=> document.getElementById('importFile').click());
+
+document.getElementById('importFile').addEventListener('change', function(){
+  const f = this.files[0]; if(!f) return; const reader = new FileReader();
+  reader.onload = function(){ try{ const arr = JSON.parse(reader.result); if(Array.isArray(arr)){ providers = arr; saveProviders(); renderMarkers(); renderList(); populateFilters(); alert('تم الاستيراد'); }else alert('الملف ليس بصيغة صحيحة'); }catch(e){ alert('خطأ بقراءة الملف'); }}; reader.readAsText(f);
+});
+
+// ---------- أدوات البحث والتحديث ----------
+document.getElementById('q').addEventListener('input', e=> renderList(e.target.value, document.getElementById('filter').value, document.getElementById('cityFilter').value));
+document.getElementById('filter').addEventListener('change', e=> renderList(document.getElementById('q').value, e.target.value, document.getElementById('cityFilter').value));
+document.getElementById('cityFilter').addEventListener('change', e=> renderList(document.getElementById('q').value, document.getElementById('filter').value, e.target.value));
+document.getElementById('refreshBtn').addEventListener('click', ()=>{ providers = loadProviders(); renderMarkers(); renderList(); populateFilters(); alert('تم التحديث'); });
+
+// ---------- تهيئة الصفحة ----------
+(function init(){ renderMarkers(); renderList(); populateFilters(); updateAuthUI(); })();
+
+</script>
+</body>
+</html>
